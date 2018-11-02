@@ -2,6 +2,8 @@
 const fs = require('fs');
 const semver = require('semver');
 const axios = require('axios');
+const Q = require('queue-fifo');
+const _ = require('lodash');
 
 // Global Constants
 const baseRegistryUrl = 'https://registry.npmjs.org';
@@ -74,8 +76,48 @@ const resolveVersion = async ({pkgName,version}) => {
     }
 };
 
+const getDependencyList = async ({pkgName, version}) => {
+    let ver = await resolveVersion({pkgName,version});
+    try{
+        let response = await axios({
+            url:baseRegistryUrl+`/${pkgName}/${ver}`,
+            type:'GET',
+            responseType:'json'
+        });
+    }
+
+
+};
+
+const resolveDependencies = async({pkgName,version,dependencyList}) => {
+    // Takes the name of the source Package, version and the List of dependencies
+    // Generates a final list of all the flat resolved dependencies
+    // dependencyList is an array of objects of the format {pkgName,version}
+
+    let dList = [];
+    let q = new Q();
+    let blackList = [];
+
+    q.enqueue(pkgName);
+    blackList.push(pkgName);
+
+    while(!q.isEmpty())
+    {
+        dependencyList.forEach(dependency => {
+            if(!(_.includes(blackList, dependency))){
+                q.enqueue(dependency);
+            }
+        });
+        dList.push(q.peek());
+        q.dequeue();
+    }
+
+    return dList;
+
+};
+
 async function display() {
-    downloadPkg({pkgName:'react',version:'~15.6.1'})
+    downloadPkg({pkgName:'react',version:'15.6.1'})
 }
 
 display();
