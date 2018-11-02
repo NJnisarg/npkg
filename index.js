@@ -1,4 +1,5 @@
 // Dependencies
+
 const targz = require('targz');
 const mv = require('mv');
 const rimraf = require('rimraf');
@@ -11,6 +12,24 @@ const _ = require('lodash');
 // Global Constants
 const baseRegistryUrl = 'https://registry.npmjs.org';
 
+// The function to initialize the npkg.json file
+const init = async () => {
+    let initData = {
+        name:"",
+        version: "1.0.0",
+        description:"",
+        author:"",
+        dependencies:{}
+    };
+    fs.appendFile('npkg.json', JSON.stringify(initData, null, 4), (err) => {
+        if(err)
+            console.log(err);
+        else
+        {
+            console.log("File initialized!");
+        }
+    });
+};
 
 // Function to resolve a version number using the semver versioning standards
 const resolveVersion = async ({pkgName,version}) => {
@@ -171,7 +190,7 @@ const downloadPkg = async ({pkgName,version}) => {
                         else{
                             // Removes the tarball and the extra package
                             rimraf.sync(`npkg_modules/${pkgName}-${ver}/`);
-                            rimraf.sync(`${pkgName}-${ver}.tgz`)
+                            rimraf.sync(`${pkgName}-${ver}.tgz`);
                         }
                     })
                 }
@@ -184,34 +203,61 @@ const downloadPkg = async ({pkgName,version}) => {
     }
 
 };
+const addToNpkg = async ({pkgName,version}) => {
+    fs.readFile('npkg.json','utf8', (err, data) => {
+        if(err)
+            console.log(err);
+        else
+        {
+            let fileContents = JSON.parse(data);
+            fileContents.dependencies[pkgName] = version;
+            fs.writeFile('npkg.json', JSON.stringify(fileContents,null,4), (err)=> {
+                if(err)
+                    console.log(err);
+                else
+                    console.log("npkg file updated with the package");
+            })
+        }
+    })
+};
 
-
-// Helper function to run the program.
-// Will be replaced with a better function in production env
-async function display() {
+const execnpkg = async() => {
+    if(!isInit())
+        init();
 
     let args = process.argv.splice(2);
 
     if(args[0] === 'install') {
         let new_args = args[1].split('=');
-        console.log(new_args);
         let pkgName = new_args[0];
         let version = new_args[1];
 
+        let currentDependencies = await getCurrentDList();
+        if(_.includes(currentDependencies,pkgName))
+            return;
 
         let dList = await resolveDependencies({pkgName, version});
+        let currentCompleteDependencies = await getCurrentCompleteDList();
+        let diff = currentCompleteDependencies.filter((item) => {
+            return !dList.has(item);
+        });
         try {
-            console.log(dList.length);
-
             dList.forEach(dependency => {
                 downloadPkg(dependency);
-            })
+            });
+            addToNpkg({pkgName, version})
 
         }
         catch (err) {
             console.log(err);
         }
     }
+};
+
+// Helper function to run the program.
+// Will be replaced with a better function in production env
+async function display() {
+    init();
 }
 
 display();
