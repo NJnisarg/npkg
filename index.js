@@ -8,27 +8,6 @@ const _ = require('lodash');
 // Global Constants
 const baseRegistryUrl = 'https://registry.npmjs.org';
 
-
-const downloadPkg = async ({pkgName,version}) => {
-
-    // Pass the name of the package and the version and it will download the package from the npm-registry
-    // Downloads a .tgz file
-    let ver = await resolveVersion({pkgName,version});
-    try{
-        let response = await axios({
-            method:"GET",
-            url:baseRegistryUrl + `/${pkgName}/-/${pkgName}-${ver}.tgz`,
-            responseType:'stream'
-        });
-        response.data.pipe(fs.createWriteStream(`${pkgName}-${ver}.tgz`));
-    }
-    catch(err)
-    {
-        console.log(err);
-    }
-
-};
-
 const resolveVersion = async ({pkgName,version}) => {
 
     // The function returns the maxSatisfying version that can be downloaded, if the version string cannot match the criteria
@@ -78,18 +57,37 @@ const resolveVersion = async ({pkgName,version}) => {
 
 const getDependencyList = async ({pkgName, version}) => {
     let ver = await resolveVersion({pkgName,version});
-    try{
+    try {
         let response = await axios({
-            url:baseRegistryUrl+`/${pkgName}/${ver}`,
-            type:'GET',
-            responseType:'json'
+            url: baseRegistryUrl + `/${pkgName}/${ver}`,
+            type: 'GET',
+            responseType: 'json'
         });
+        if(response.data.dependencies===null || response.data.dependencies===undefined)
+        {
+            return [];
+        }
+        let dList = Object.entries(response.data.dependencies).map(([k, v]) => {
+            try{
+                return ({pkgName: k, version: v});
+            }
+            catch(err)
+            {
+                return [];
+            }
+        });
+
+        return dList;
+    }
+    catch(err)
+    {
+        console.log(err);
     }
 
 
 };
 
-const resolveDependencies = async({pkgName,version,dependencyList}) => {
+const resolveDependencies = async({pkgName,version}) => {
     // Takes the name of the source Package, version and the List of dependencies
     // Generates a final list of all the flat resolved dependencies
     // dependencyList is an array of objects of the format {pkgName,version}
@@ -97,27 +95,66 @@ const resolveDependencies = async({pkgName,version,dependencyList}) => {
     let dList = [];
     let q = new Q();
     let blackList = [];
+    let grayList = [];
 
-    q.enqueue(pkgName);
-    blackList.push(pkgName);
+    q.enqueue({pkgName,version});
 
     while(!q.isEmpty())
     {
+        grayList.push(q.peek().pkgName);
+        let dependencyList = await getDependencyList(q.peek());
         dependencyList.forEach(dependency => {
-            if(!(_.includes(blackList, dependency))){
-                q.enqueue(dependency);
+            if((_.includes(blackList, dependency.pkgName)) || (_.includes(grayList, dependency.pkgName))){
+                return;
             }
+            q.enqueue(dependency);
+            grayList.push(dependency.pkgName);
         });
+
+        console.log(q.peek());
         dList.push(q.peek());
+        grayList.splice(grayList.indexOf(q.peek().pkgName),1);
+        blackList.push(q.peek().pkgName);
         q.dequeue();
+
     }
 
     return dList;
 
 };
 
+const downloadPkg = async ({pkgName,version}) => {
+
+    // Pass the name of the package and the version and it will download the package from the npm-registry
+    // Downloads a .tgz file
+    let ver = await resolveVersion({pkgName,version});
+    try{
+        let response = await axios({
+            method:"GET",
+            url:baseRegistryUrl + `/${pkgName}/-/${pkgName}-${ver}.tgz`,
+            responseType:'stream'
+        });
+        response.data.pipe(fs.createWriteStream(`${pkgName}-${ver}.tgz`));
+    }
+    catch(err)
+    {
+        console.log(err);
+    }
+
+};
+
+
+
 async function display() {
-    downloadPkg({pkgName:'react',version:'15.6.1'})
+
+    let dList = await resolveDependencies({pkgName:'react',version:'^15.0.0'});
+    try{
+        console.log(dList.length);
+    }
+    catch(err)
+    {
+        console.log(err);
+    }
 }
 
 display();
