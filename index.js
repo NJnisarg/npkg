@@ -169,18 +169,27 @@ const downloadPkg = async ({pkgName,version}) => {
 
 async function display() {
 
-    let dList = await resolveDependencies({pkgName:'semver',version:'5.6.0'});
-    try{
-        console.log(dList.length);
+    let args = process.argv.splice(2);
 
-        dList.forEach(dependency => {
-            downloadPkg(dependency);
-        })
+    if(args[0] === 'install') {
+        let new_args = args[1].split('=');
+        console.log(new_args);
+        let pkgName = new_args[0];
+        let version = new_args[1];
 
-    }
-    catch(err)
-    {
-        console.log(err);
+
+        let dList = await resolveDependencies({pkgName, version});
+        try {
+            console.log(dList.length);
+
+            dList.forEach(dependency => {
+                downloadPkg(dependency);
+            })
+
+        }
+        catch (err) {
+            console.log(err);
+        }
     }
 }
 
