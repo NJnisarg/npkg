@@ -11,7 +11,10 @@
   "dependencies": {
     "axios": "^0.18.0",
     "lodash": "^4.17.11",
+    "mv": "^2.1.1",
     "queue-fifo": "^0.2.5",
-    "semver": "^5.6.0"
+    "rimraf": "^2.6.2",
+    "semver": "^5.6.0",
+    "targz": "^1.0.1"
   }
 }

@@ -1,4 +1,7 @@
 // Dependencies
+const targz = require('targz');
+const mv = require('mv');
+const rimraf = require('rimraf');
 const fs = require('fs');
 const semver = require('semver');
 const axios = require('axios');
@@ -134,7 +137,26 @@ const downloadPkg = async ({pkgName,version}) => {
             url:baseRegistryUrl + `/${pkgName}/-/${pkgName}-${ver}.tgz`,
             responseType:'stream'
         });
-        response.data.pipe(fs.createWriteStream(`${pkgName}-${ver}.tgz`));
+        let downloading = response.data.pipe(fs.createWriteStream(`${pkgName}-${ver}.tgz`));
+        downloading.on('finish',  () => {
+            targz.decompress({
+                src: `${pkgName}-${ver}.tgz`,
+                dest: `npkg_modules/${pkgName}-${ver}`
+            }, (err) => {
+                if(err)
+                    console.log(err);
+                else{
+                    mv(`npkg_modules/${pkgName}-${ver}/package`,`npkg_modules/${pkgName}`, (err) => {
+                        if(err)
+                            console.log(err);
+                        else{
+                            rimraf.sync(`npkg_modules/${pkgName}-${ver}/`);
+                            rimraf.sync(`${pkgName}-${ver}.tgz`)
+                        }
+                    })
+                }
+            });
+        });
     }
     catch(err)
     {
@@ -147,9 +169,14 @@ const downloadPkg = async ({pkgName,version}) => {
 
 async function display() {
 
-    let dList = await resolveDependencies({pkgName:'react',version:'^15.0.0'});
+    let dList = await resolveDependencies({pkgName:'semver',version:'5.6.0'});
     try{
         console.log(dList.length);
+
+        dList.forEach(dependency => {
+            downloadPkg(dependency);
+        })
+
     }
     catch(err)
     {
