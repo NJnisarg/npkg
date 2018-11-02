@@ -1,0 +1,15 @@
+{
+  "name": "npkg",
+  "version": "1.0.0",
+  "description": "The package manager for nodeJS environment",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Nisarg S. Joshi",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "semver": "^5.6.0"
+  }
+}
