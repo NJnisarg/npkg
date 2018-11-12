@@ -12,6 +12,12 @@ const _ = require('lodash');
 // Global Constants
 const baseRegistryUrl = 'https://registry.npmjs.org';
 
+// The function to check if the npkg.json file is init or not. Does the check synchronously
+const isInit = () => {
+    return fs.existsSync('npkg.json');
+};
+
+
 // The function to initialize the npkg.json file
 const init = async () => {
     let initData = {
@@ -25,10 +31,19 @@ const init = async () => {
         if(err)
             console.log(err);
         else
-        {
             console.log("File initialized!");
-        }
     });
+
+    let lockFileData = {
+        dependencies:{}
+    };
+
+    fs.appendFile('npkg-lock.json', JSON.stringify(lockFileData, null, 4), (err) => {
+        if(err)
+            console.log(err);
+        else
+            console.log("Lock file initialized!")
+    })
 };
 
 // Function to resolve a version number using the semver versioning standards
@@ -186,7 +201,22 @@ const downloadPkg = async ({pkgName,version}) => {
                 else{
                     mv(`npkg_modules/${pkgName}-${ver}/package`,`npkg_modules/${pkgName}`, (err) => {
                         if(err)
-                            console.log(err);
+                        {
+                            if(err.code==='ENOTEMPTY')
+                            {
+                                rimraf.sync(`npkg_modules/${pkgName}/`);
+                                mv(`npkg_modules/${pkgName}-${ver}/package`,`npkg_modules/${pkgName}`, (err) => {
+                                    if(!err)
+                                    {
+                                        rimraf.sync(`npkg_modules/${pkgName}-${ver}/`);
+                                        rimraf.sync(`${pkgName}-${ver}.tgz`);
+                                    }
+
+                                });
+                            }
+                            else
+                                console.log(err.code);
+                        }
                         else{
                             // Removes the tarball and the extra package
                             rimraf.sync(`npkg_modules/${pkgName}-${ver}/`);
@@ -221,31 +251,80 @@ const addToNpkg = async ({pkgName,version}) => {
     })
 };
 
-const execnpkg = async() => {
-    if(!isInit())
-        init();
+const addToNpkgLock = async (diff) => {
+    fs.readFile('npkg-lock.json','utf8', (err, data) => {
+        if(err)
+            console.log(err);
+        else
+        {
+            let fileContents = JSON.parse(data);
+            diff.forEach((item) => {
+                fileContents.dependencies[item.pkgName] = item.version;
+            });
 
+            fs.writeFile('npkg-lock.json', JSON.stringify(fileContents,null,4), (err)=> {
+                if(err)
+                    console.log(err);
+                else
+                    console.log("npkg-lock file updated with the package");
+            })
+        }
+    })
+};
+
+const getCurrentDList = () => {
+    let data = fs.readFileSync('npkg.json','utf8');
+
+    let fileContents = JSON.parse(data);
+    let dList = fileContents.dependencies;
+
+    let currentDList = [];
+    Object.keys(dList).forEach(key => {
+        currentDList.push({ pkgName:key, version:dList[key]})
+    });
+    return currentDList;
+};
+
+const execnpkg = async() => {
     let args = process.argv.splice(2);
+
+    if(!isInit() && args[0] !=='init')
+    {
+        console.log("npkg not initialized. Please use the command node index init.");
+        process.exit();
+    }
+    else if(!isInit() && args[0] === 'init')
+    {
+        init();
+        console.log("npkg initialized!");
+        process.exit();
+    }
 
     if(args[0] === 'install') {
         let new_args = args[1].split('=');
         let pkgName = new_args[0];
         let version = new_args[1];
 
-        let currentDependencies = await getCurrentDList();
-        if(_.includes(currentDependencies,pkgName))
-            return;
+        // getCurrentDList checks the npkg.json file to get the list of top level packages
+        let currentDependencies = getCurrentDList();
+        try{
+            if(_.some(currentDependencies,{pkgName,version})) {
+                console.log("Package already exists with the same version");
+                return;
+            }
+        }
+        catch(err){
+            console.log(err);
+        }
 
         let dList = await resolveDependencies({pkgName, version});
-        let currentCompleteDependencies = await getCurrentCompleteDList();
-        let diff = currentCompleteDependencies.filter((item) => {
-            return !dList.has(item);
-        });
+
         try {
             dList.forEach(dependency => {
                 downloadPkg(dependency);
             });
-            addToNpkg({pkgName, version})
+            addToNpkg({pkgName, version});
+            addToNpkgLock(dList);
 
         }
         catch (err) {
@@ -257,7 +336,7 @@ const execnpkg = async() => {
 // Helper function to run the program.
 // Will be replaced with a better function in production env
 async function display() {
-    init();
+    execnpkg();
 }
 
 display();
