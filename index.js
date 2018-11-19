@@ -31,7 +31,7 @@ const init = async () => {
         if(err)
             console.log(err);
         else
-            console.log("File initialized!");
+            console.log("npkg File initialized!");
     });
 
     let lockFileData = {
@@ -42,7 +42,7 @@ const init = async () => {
         if(err)
             console.log(err);
         else
-            console.log("Lock file initialized!")
+            console.log("npkg lock file initialized!")
     })
 };
 
@@ -233,6 +233,7 @@ const downloadPkg = async ({pkgName,version}) => {
     }
 
 };
+
 const addToNpkg = async ({pkgName,version}) => {
     fs.readFile('npkg.json','utf8', (err, data) => {
         if(err)
@@ -286,8 +287,14 @@ const getCurrentDList = () => {
 };
 
 const execnpkg = async() => {
+
+    // Get the list of arguments after the first 2 arguments.
+    // For now the command to run is of the form "node index xyz"
+    // The below line extracts arguments from "xyz" onwards
     let args = process.argv.splice(2);
 
+    // Checking if the npkg is initialized or not.
+    // If not then we force them to initialization
     if(!isInit() && args[0] !=='init')
     {
         console.log("npkg not initialized. Please use the command node index init.");
@@ -296,11 +303,14 @@ const execnpkg = async() => {
     else if(!isInit() && args[0] === 'init')
     {
         init();
-        console.log("npkg initialized!");
-        process.exit();
+    }
+    else if(isInit() && args[0] === 'init')
+    {
+        console.log("Fucker its already initialized!");
     }
 
-    if(args[0] === 'install') {
+    // The code segment that handles the command "node index install packageName=semverString"
+    if(args[0] === 'install' && args[1]!==undefined) {
         let new_args = args[1].split('=');
         let pkgName = new_args[0];
         let version = new_args[1];
@@ -330,6 +340,24 @@ const execnpkg = async() => {
         catch (err) {
             console.log(err);
         }
+    }
+    else if(args[0]==='install' && args[1]===undefined)
+    {
+        // getCurrentDList checks the npkg.json file to get the list of top level packages
+        let currentDependencies = getCurrentDList();
+
+        currentDependencies.forEach(async (dependency) => {
+            let dList = await resolveDependencies(dependency);
+
+            try {
+                dList.forEach(dependency => {
+                    downloadPkg(dependency);
+                });
+            }
+            catch (err) {
+                console.log(err);
+            }
+        });
     }
 };
 
